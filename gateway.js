@@ -48,6 +48,31 @@ app.use(
     })
   );
 
+// Notify service (HTTP + Socket.IO)
+app.use(
+    "/api/v1/notify",
+    createProxyMiddleware({
+      target: "http://localhost:5002",
+      changeOrigin: true,
+      xfwd: true,
+      ws: true, // Socket.IO upgrade
+      logLevel: "debug",
+      pathRewrite: (path) => `/api/v1/notify${path.replace(/^\/api\/v1\/notify/, "")}`,
+    })
+  );
+
+// Notify service — Socket.IO endpoint (default path: /socket.io)
+app.use(
+    "/socket.io",
+    createProxyMiddleware({
+      target: "http://localhost:5002",
+      changeOrigin: true,
+      xfwd: true,
+      ws: true,
+      logLevel: "debug",
+    })
+  );
+
 // app.use(
 //   "/api/v1/study",
 //   createProxyMiddleware({
