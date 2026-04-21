@@ -48,69 +48,51 @@ app.use(
     })
   );
 
-// Notify service (HTTP + Socket.IO)
+// Notify service HTTP (NO ws:true — Socket.IO lives at /socket.io below).
 app.use(
     "/api/v1/notify",
     createProxyMiddleware({
       target: "http://localhost:5002",
       changeOrigin: true,
       xfwd: true,
-      ws: true, // Socket.IO upgrade
       logLevel: "debug",
       pathRewrite: (path) => `/api/v1/notify${path.replace(/^\/api\/v1\/notify/, "")}`,
     })
   );
 
-// Notify service — Socket.IO endpoint (default path: /socket.io)
-// Save the middleware instance so we can hook its upgrade() handler on the
-// HTTP server below. Under Express 5 + http-proxy-middleware v3, `ws: true`
-// alone does NOT attach the upgrade listener — the browser's WS handshake
-// fails silently at the TCP layer without the explicit server.on('upgrade').
+// Socket.IO — use pathFilter (not app.use prefix) so the `/socket.io` prefix
+// is NOT stripped. Otherwise the upstream receives `/?EIO=...` and the request
+// lands on notify_service's health router instead of the Socket.IO handler.
 const socketIoProxy = createProxyMiddleware({
   target: "http://localhost:5002",
   changeOrigin: true,
   xfwd: true,
   ws: true,
+  pathFilter: "/socket.io",
   logLevel: "debug",
 });
-app.use("/socket.io", socketIoProxy);
-
-// app.use(
-//   "/api/v1/study",
-//   createProxyMiddleware({
-//     target: "http://localhost:5003",
-//     changeOrigin: true,
-//     xfwd: true,
-//   })
-// );
+app.use(socketIoProxy);
 
 /* ---------------------------
    Frontend (LAST)
 ---------------------------- */
 // >> npm run dev -- -p 3001
 // >> npx next dev -p 3001
-
+//
+// pathFilter excludes /socket.io and /api/v1 so this proxy's auto-subscribed
+// WS-upgrade listener doesn't hijack Socket.IO or API traffic and forward it
+// to Next.js (which would answer with EOF and break wss://).
 const frontendProxy = createProxyMiddleware({
   target: "http://localhost:3001",
   changeOrigin: true,
-  ws: true, // for HMR / WebSocket
+  ws: true, // for Next.js HMR
+  pathFilter: (pathname) =>
+    !pathname.startsWith("/socket.io") && !pathname.startsWith("/api/v1"),
 });
-app.use("/", frontendProxy);
+app.use(frontendProxy);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Dev Gateway running on http://localhost:${PORT}`);
-});
-
-// Route WebSocket upgrades by path. Express 5 + http-proxy-middleware v3
-// require an explicit server.on('upgrade'); without routing, every upgrade
-// (including Next.js /_next/webpack-hmr) is sent to whichever proxy the
-// hook points at.
-server.on("upgrade", (req, socket, head) => {
-  if (req.url && req.url.startsWith("/socket.io")) {
-    socketIoProxy.upgrade(req, socket, head);
-  } else {
-    frontendProxy.upgrade(req, socket, head);
-  }
 });
 
 
