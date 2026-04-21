@@ -62,16 +62,18 @@ app.use(
   );
 
 // Notify service — Socket.IO endpoint (default path: /socket.io)
-app.use(
-    "/socket.io",
-    createProxyMiddleware({
-      target: "http://localhost:5002",
-      changeOrigin: true,
-      xfwd: true,
-      ws: true,
-      logLevel: "debug",
-    })
-  );
+// Save the middleware instance so we can hook its upgrade() handler on the
+// HTTP server below. Under Express 5 + http-proxy-middleware v3, `ws: true`
+// alone does NOT attach the upgrade listener — the browser's WS handshake
+// fails silently at the TCP layer without the explicit server.on('upgrade').
+const socketIoProxy = createProxyMiddleware({
+  target: "http://localhost:5002",
+  changeOrigin: true,
+  xfwd: true,
+  ws: true,
+  logLevel: "debug",
+});
+app.use("/socket.io", socketIoProxy);
 
 // app.use(
 //   "/api/v1/study",
@@ -97,9 +99,14 @@ app.use(
   })
 );
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Dev Gateway running on http://localhost:${PORT}`);
 });
+
+// Hook WebSocket upgrade events to the Socket.IO proxy. Required for
+// Express 5 + http-proxy-middleware v3 — without this, wss:// handshakes
+// to /socket.io/ die at the TCP-upgrade layer.
+server.on("upgrade", socketIoProxy.upgrade);
 
 
 
