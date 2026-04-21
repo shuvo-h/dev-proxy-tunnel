@@ -90,23 +90,28 @@ app.use("/socket.io", socketIoProxy);
 // >> npm run dev -- -p 3001
 // >> npx next dev -p 3001
 
-app.use(
-  "/",
-  createProxyMiddleware({
-    target: "http://localhost:3001",
-    changeOrigin: true,
-    ws: true, // for HMR / WebSocket
-  })
-);
+const frontendProxy = createProxyMiddleware({
+  target: "http://localhost:3001",
+  changeOrigin: true,
+  ws: true, // for HMR / WebSocket
+});
+app.use("/", frontendProxy);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Dev Gateway running on http://localhost:${PORT}`);
 });
 
-// Hook WebSocket upgrade events to the Socket.IO proxy. Required for
-// Express 5 + http-proxy-middleware v3 — without this, wss:// handshakes
-// to /socket.io/ die at the TCP-upgrade layer.
-server.on("upgrade", socketIoProxy.upgrade);
+// Route WebSocket upgrades by path. Express 5 + http-proxy-middleware v3
+// require an explicit server.on('upgrade'); without routing, every upgrade
+// (including Next.js /_next/webpack-hmr) is sent to whichever proxy the
+// hook points at.
+server.on("upgrade", (req, socket, head) => {
+  if (req.url && req.url.startsWith("/socket.io")) {
+    socketIoProxy.upgrade(req, socket, head);
+  } else {
+    frontendProxy.upgrade(req, socket, head);
+  }
+});
 
 
 
