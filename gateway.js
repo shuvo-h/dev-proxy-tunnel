@@ -70,7 +70,7 @@ app.use("/api/v1/moderation/ml", (req, res) => {
 app.use(
     "/api/v1/moderation",
     createProxyMiddleware({
-      target: "http://localhost:5004",
+      target: "http://localhost:5040",
       changeOrigin: true,
       xfwd: true,
       logLevel: "debug",
