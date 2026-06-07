@@ -60,6 +60,24 @@ app.use(
     })
   );
 
+// Moderation service (ModeraStack) — /ml is INTERNAL ONLY (AD-05): only the
+// in-project Python worker on localhost may reach it. Block at the edge,
+// BEFORE the moderation proxy below.
+app.use("/api/v1/moderation/ml", (req, res) => {
+    res.status(403).json({ message: "Forbidden" });
+  });
+
+app.use(
+    "/api/v1/moderation",
+    createProxyMiddleware({
+      target: "http://localhost:5004",
+      changeOrigin: true,
+      xfwd: true,
+      logLevel: "debug",
+      pathRewrite: (path) => `/api/v1/moderation${path.replace(/^\/api\/v1\/moderation/, "")}`,
+    })
+  );
+
 // Socket.IO — use pathFilter (not app.use prefix) so the `/socket.io` prefix
 // is NOT stripped. Otherwise the upstream receives `/?EIO=...` and the request
 // lands on notify_service's health router instead of the Socket.IO handler.

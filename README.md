@@ -11,3 +11,4 @@ sudo systemctl start redis-server
 
 
 
+npm run dev
